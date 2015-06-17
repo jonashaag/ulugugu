@@ -1,5 +1,5 @@
 from ulugugu import sdl, drawings, keys
-from ulugugu.events import Event, ACK, MouseEvent, KeyPress, send_event, event_used
+from ulugugu.events import Event, ACK, KeyPress, send_event, event_used
 
 
 class ReceiveChild(Event):
@@ -8,12 +8,26 @@ class ReceiveChild(Event):
     self.child_xoff = child_xoff
     self.child_yoff = child_yoff
 
+
 class UnparentChild(Event):
   def __init__(self, former_parent, child, child_xoff, child_yoff):
     self.former_parent = former_parent
     self.child = child
     self.child_xoff = child_xoff
     self.child_yoff = child_yoff
+
+class Drag(Event):
+  def __init__(self, start_x, start_y, xrel, yrel):
+    self.start_x = start_x
+    self.start_y = start_y
+    self.xrel = xrel
+    self.yrel = yrel
+
+class DragStart(Event):
+  pass
+
+class DragStop(Event):
+  pass
 
 
 def pt_in_rect(x, y, rx, ry, rw, rh):
@@ -43,6 +57,45 @@ class Object:
     else:
       return handler(event_ctx)
 
+  def noop(self, event, event_ctx):
+    pass
+
+
+class DragWrapper(Object):
+  def __init__(self, wrapped_obj):
+    self.wrapped_obj = wrapped_obj
+    self.drag_started = False
+    self.drag_origin_x = None
+    self.drag_origin_y = None
+
+  def on_MousePress(self, event, event_ctx):
+    self.drag_origin_x = event_ctx.mouse_x
+    self.drag_origin_y = event_ctx.mouse_y
+    return send_event(self.wrapped_obj, event, event_ctx)
+
+  def on_MouseRelease(self, event, event_ctx):
+    if self.drag_started:
+      self.drag_started = False
+      send_event(self.wrapped_obj, DragStop(), event_ctx)
+    self.drag_origin_x = self.drag_origin_y = None
+    return send_event(self.wrapped_obj, event, event_ctx)
+
+  def on_MouseMove(self, event, event_ctx):
+    if self.drag_origin_x is None:
+      return send_event(self.wrapped_obj, event, event_ctx)
+    else:
+      if not self.drag_started:
+        self.drag_started = True
+        send_event(self.wrapped_obj, DragStart(), event_ctx)
+      drag_event = Drag(self.drag_origin_x, self.drag_origin_y, event.xrel, event.yrel)
+      return send_event(self.wrapped_obj, drag_event, event_ctx)
+
+  def on_KeyPress(self, event, event_ctx):
+    return send_event(self.wrapped_obj, event, event_ctx)
+
+  def draw(self, ctx):
+    return self.wrapped_obj.draw(ctx)
+
 
 class TextInput(Object):
   allowed_chars = None
@@ -57,14 +110,12 @@ class TextInput(Object):
   def draw(self, ctx):
     drawings.Text(self.text).draw(ctx)
 
-  def on_MousePress(self, event, event_ctx):
-    pass
-
-  def on_MouseRelease(self, event, event_ctx):
-    pass
-
-  def on_MouseMove(self, event, event_ctx):
-    pass
+  on_MousePress = Object.noop
+  on_MouseRelease = Object.noop
+  on_MouseMove = Object.noop
+  on_Drag = Object.noop
+  on_DragStart = Object.noop
+  on_DragStop = Object.noop
 
   def on_KeyPress_BACKSPACE(self, _):
     self.text = self.text[:-1]
@@ -95,6 +146,37 @@ class StringInput(TextInput):
   pass
 
 
+class Common(Object):
+  def send_event_child(self, child, event, event_ctx):
+    child_context = event_ctx.clone(
+      mouse_x=event_ctx.mouse_x - child.x,
+      mouse_y=event_ctx.mouse_y - child.y,
+    )
+    return send_event(child.inner, event, child_context)
+
+  def get_children_under_cursor(self, event_ctx):
+      return self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
+
+  def get_children_at_pos(self, x, y):
+    return [o for o in self.children if pt_in_rect(x, y, o.x, o.y, o.inner.width(), o.inner.height())]
+
+  def _maybe_drop_child(self, event_ctx, child, x, y, target):
+    if child is target:
+      # Can't drop on self
+      return
+    if rect_in_rect(x, y, child.width(), child.height(),
+                    target.x, target.y, target.inner.width(), target.inner.height()):
+      return self._drop_child(event_ctx, child, x, y, target)
+
+  def _drop_child(self, event_ctx, child, x, y, target):
+    event = ReceiveChild(
+      child        = child,
+      child_xoff   = event_ctx.mouse_x - x,
+      child_yoff   = event_ctx.mouse_y - y,
+    )
+    return self.send_event_child(target, event, event_ctx)
+
+
 class Movable:
   def __init__(self, inner, x=0, y=0):
     self.inner = inner
@@ -110,14 +192,13 @@ class Movable:
     self.y += yoff
 
 
-class Container(Object):
+class Container(Common):
   unparent_children = True
 
   def __init__(self, width, height):
     self.width = lambda: width
     self.height = lambda: height
     self.focused_child = None
-    self.dragged_child = None
     self.children = []
 
   def draw(self, ctx):
@@ -143,19 +224,12 @@ class Container(Object):
         raise TypeError("Don't know how to deal with child response %s" % response)
       former_parent = [c for c in self.children if c.inner == response.former_parent][0]
       self._unfocus_child(former_parent)
-      self._add_child_from_drag(
-        response,
+      self.focused_child = self.add_child(
+        response.child,
         event_ctx.mouse_x - response.child_xoff,
         event_ctx.mouse_y - response.child_yoff,
       )
       return ACK
-
-  def send_event_child(self, child, event, event_ctx):
-    child_context = event_ctx.clone(
-      mouse_x=event_ctx.mouse_x - child.x,
-      mouse_y=event_ctx.mouse_y - child.y,
-    )
-    return send_event(child.inner, event, child_context)
 
   def on_KeyPress_ESCAPE(self, event_ctx):
     if self.focused_child:
@@ -173,58 +247,59 @@ class Container(Object):
         return response
 
   def on_ReceiveChild(self, event, event_ctx):
-    self._add_child_from_drag(
-      event,
+    self.focused_child = self.add_child(
+      event.child,
       event_ctx.mouse_x - event.child_xoff,
       event_ctx.mouse_y - event.child_yoff
     )
     return ACK
 
   def on_MousePress(self, press, event_ctx):
-    children_at_pos = self._get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
+    children_at_pos = self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
     if children_at_pos:
       self.focused_child = children_at_pos[-1]
       response = self.send_event_child(self.focused_child, press, event_ctx)
       if event_used(response):
         return response
-      else:
-        self.dragged_child = self.focused_child
     else:
       self._unfocus_child(self.focused_child)
 
-  def get_children_under_cursor(self, event_ctx):
-      return self._get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
-
-  def on_MouseMove(self, movement, event_ctx):
+  def on_MouseMove(self, event, event_ctx):
     receivers = self.get_children_under_cursor(event_ctx)
-    if self.focused_child:
-      receivers.insert(0, self.focused_child)
     for child in receivers:
-        response = self.send_event_child(child, movement, event_ctx)
+        response = self.send_event_child(child, event, event_ctx)
         if event_used(response):
           return self.handle_child_response(response, event_ctx)
 
-    if not self.dragged_child:
+  on_DragStart = Object.noop
+  on_DragStop = Object.noop
+
+  def on_Drag(self, event, event_ctx):
+    if self.focused_child is None:
       return
 
-    self._raise_child(self.dragged_child)
-    self.dragged_child.move_relative(movement.xrel, movement.yrel)
+    response = self.send_event_child(self.focused_child, event, event_ctx)
+    if event_used(response):
+      return self.handle_child_response(response, event_ctx)
+
+    self._raise_child(self.focused_child)
+    self.focused_child.move_relative(event.xrel, event.yrel)
 
     # Child out of bounding box?
-    if not rect_in_rect(self.dragged_child.x, self.dragged_child.y, self.dragged_child.inner.width(), self.dragged_child.inner.height(),
+    if not rect_in_rect(self.focused_child.x, self.focused_child.y, self.focused_child.inner.width(), self.focused_child.inner.height(),
                         0, 0, self.width(), self.height()):
       if self.unparent_children:
-        return self._unparent_child(event_ctx, self.dragged_child)
+        return self._unparent_child(event_ctx, self.focused_child)
       else:
         return ACK
 
     # Child on top of other child => drop?
-    for child in reversed(self.children):
-      if child is self.dragged_child:
-        continue
-      if rect_in_rect(self.dragged_child.x, self.dragged_child.y, self.dragged_child.inner.width(), self.dragged_child.inner.height(),
-                      child.x, child.y, child.inner.width(), child.inner.height()):
-        return self._drop_child(event_ctx, self.dragged_child, target=child)
+    for target in reversed(self.children):
+      response = self._maybe_drop_child(event_ctx, self.focused_child.inner, self.focused_child.x, self.focused_child.y, target)
+      if event_used(response):
+        self._remove_child(self.focused_child)
+        self.focused_child = target
+        return self.handle_child_response(response, event_ctx)
 
     return ACK
 
@@ -233,25 +308,10 @@ class Container(Object):
       response = self.send_event_child(self.focused_child, event, event_ctx)
       if event_used(response):
         return response
-    self._stop_dragging()
 
   def _unfocus_child(self, child):
-    if self.dragged_child is child:
-      self._stop_dragging()
     if self.focused_child is child:
       self.focused_child = None
-
-  def _drop_child(self, event_ctx, child, target):
-    event = ReceiveChild(
-      child        = child.inner,
-      child_xoff   = event_ctx.mouse_x - child.x,
-      child_yoff   = event_ctx.mouse_y - child.y,
-    )
-    response = self.send_event_child(target, event, event_ctx)
-    if event_used(response):
-      self._remove_child(child)
-      self.focused_child = target
-      return ACK
 
   def _unparent_child(self, event_ctx, child):
     event = UnparentChild(
@@ -263,19 +323,10 @@ class Container(Object):
     self._remove_child(child)
     return event
 
-  def _get_children_at_pos(self, x, y):
-    return [o for o in self.children if pt_in_rect(x, y, o.x, o.y, o.inner.width(), o.inner.height())]
-
   def add_child(self, child, x, y):
     wrapped = Movable(child, x, y)
     self.children.append(wrapped)
     return wrapped
-
-  def _add_child_from_drag(self, event, x, y):
-    self.focused_child = self.dragged_child = self.add_child(event.child, x, y)
-
-  def _stop_dragging(self):
-    self.dragged_child = None
 
   def _remove_child(self, child):
     self._unfocus_child(child)
@@ -326,36 +377,13 @@ class DropArea(Container):
     ).draw(ctx)
     return super().draw(ctx)
 
-  def _stop_dragging(self):
-    super()._stop_dragging()
+  def on_DragStop(self, event, event_ctx):
     if self.children:
       self.children[0].x = 0
       self.children[0].y = 0
 
 
-class ApplicationWidget(Object):
-  def __init__(self):
-    self.func = DropArea(100, 100)
-    self.arg1 = DropArea(100, 100)
-    self.arg2 = DropArea(100, 100)
-    self.width = lambda: max(self.func.width(), self.arg1.width() + self.arg2.width())
-    self.height = lambda: self.func.height() + max(self.arg1.height(), self.arg2.height())
-
-  def draw(self, ctx):
-    for x, y, child in [
-      ((self.width() - self.func.width())/2, 0, self.func),
-      (0, self.func.height(), self.arg1),
-      (self.arg1.width(), self.func.height(), self.arg2)
-    ]:
-      with ctx:
-        ctx.translate(x, y)
-        with ctx:
-          child.draw(ctx)
-
-
-class BesidesWidget(Object):
-  unparent_children = True
-
+class BesidesWidget(Common):
   def __init__(self, left, right):
     self.width = lambda: left.width() + right.width()
     self.height = lambda: max(left.height(), right.height())
@@ -385,62 +413,48 @@ class BesidesWidget(Object):
         raise TypeError("Don't know how to deal with child response %s" % response)
       return response.clone(former_parent=self)
 
-  def send_event_child(self, child, event, event_ctx):
-    child_context = event_ctx.clone(
-      mouse_x=event_ctx.mouse_x - child.x,
-      mouse_y=event_ctx.mouse_y - child.y,
-    )
-    return send_event(child.inner, event, child_context)
+  def forward_event_to_focused_child(self, event, event_ctx):
+    return self.forward_event_to_child(self.focused_child, event, event_ctx)
+
+  def forward_event_to_child_under_cursor(self, event, event_ctx):
+    return self.forward_event_to_child(self.get_child_under_cursor(event_ctx), event, event_ctx)
+
+  on_KeyPress     = forward_event_to_focused_child
+  on_Drag         = forward_event_to_focused_child
+  on_DragStart    = forward_event_to_focused_child
+  on_DragStop     = forward_event_to_focused_child
+  on_MouseRelease = forward_event_to_focused_child
+  on_MouseMove    = forward_event_to_child_under_cursor
 
   def on_ReceiveChild(self, event, event_ctx):
-    child = self.get_child_under_cursor(event_ctx)
-    if rect_in_rect(event_ctx.mouse_x - event.child_xoff, event_ctx.mouse_y - event.child_yoff, event.child.width(), event.child.height(),
-                    child.x, child.y, child.inner.width(), child.inner.height()):
-      response = self.send_event_child(child, event, event_ctx)
-      if response is ACK:
-        self.focused_child = child
-      return self.handle_child_response(response, event_ctx)
+    # Child on top of other child => drop?
+    for target in reversed(self.children):
+      response = self._maybe_drop_child(event_ctx, event.child, event_ctx.mouse_x - event.child_xoff, event_ctx.mouse_y - event.child_yoff, target)
+      if event_used(response):
+        self.focused_child = target
+        return self.handle_child_response(response, event_ctx)
 
   def on_MousePress(self, event, event_ctx):
-    new_focused_child = self.get_child_under_cursor(event_ctx)
-    if new_focused_child:
-      self.focused_child = new_focused_child
-      response = self.send_event_child(self.focused_child, event, event_ctx)
+    child = self.get_child_under_cursor(event_ctx)
+    if child:
+      response = self.send_event_child(child, event, event_ctx)
       if event_used(response):
+        self.focused_child = child
         return self.handle_child_response(response, event_ctx)
       else:
         return ACK
 
-  def on_MouseMove(self, movement, event_ctx):
-    return self.forward_event_to_child_under_cursor(movement, event_ctx)
-
-  def on_MouseRelease(self, event, event_ctx):
-    return self.forward_event_to_focused_child(event, event_ctx)
-
-  def on_KeyPress_default(self, event, event_ctx):
-    return self.forward_event_to_focused_child(event, event_ctx)
-
-  def forward_event_to_focused_child(self, event, event_ctx):
-    if self.focused_child:
-      response = self.send_event_child(self.focused_child, event, event_ctx)
-      if event_used(response):
-        return self.handle_child_response(response, event_ctx)
-
-  def forward_event_to_child_under_cursor(self, event, event_ctx):
-    child = self.get_child_under_cursor(event_ctx)
-    if child:
+  def forward_event_to_child(self, child, event, event_ctx):
+    if child is not None:
       response = self.send_event_child(child, event, event_ctx)
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
 
   def get_child_under_cursor(self, event_ctx):
-    children_under_cursor = self._get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
+    children_under_cursor = self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
     if children_under_cursor:
       assert len(children_under_cursor) == 1
       return children_under_cursor[0]
-
-  def _get_children_at_pos(self, x, y):
-    return [o for o in self.children if pt_in_rect(x, y, o.x, o.y, o.inner.width(), o.inner.height())]
 
 
 class ProgramState:
@@ -459,5 +473,6 @@ class ProgramState:
 
 workspace = Workspace(700, 500)
 workspace.add_child(BesidesWidget(DropArea(100, 100), DropArea(100, 100)), 150, 150)
-workspace.add_child(DropArea(100, 100), 400, 300)
-sdl.main(ProgramState(workspace))
+workspace.add_child(DropArea(50, 50), 400, 300)
+workspace.add_child(BesidesWidget(IntegerInput(), BesidesWidget(DropArea(50,50), DropArea(100,100))), 10, 10)
+sdl.main(ProgramState(DragWrapper(workspace)))
