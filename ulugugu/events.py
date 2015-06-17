@@ -12,7 +12,7 @@ ACK = ACK()
 
 
 def send_event(target, event, event_context):
-  return target.receive_event(event, event_context)
+  return target.handle_event(event, event_context)
 
 def event_used(response):
   return response is not None
@@ -48,8 +48,6 @@ class KeyRelease(KeyboardEvent):
 def from_sdl_event(sdl_event):
   if sdl_event.type == sdl2.SDL_KEYDOWN:
     return KeyPress(keys.from_keysym(sdl_event.key.keysym.sym))
-  elif sdl_event.type == sdl2.SDL_KEYUP:
-    return KeyRelease(keys.from_keysym(sdl_event.key.keysym.sym))
   elif sdl_event.type == sdl2.SDL_MOUSEBUTTONDOWN:
     return MousePress()
   elif sdl_event.type == sdl2.SDL_MOUSEBUTTONUP:
