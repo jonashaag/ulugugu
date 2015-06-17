@@ -154,21 +154,38 @@ class Common(Object):
     )
     return send_event(child.inner, event, child_context)
 
+  def forward_event_to_child(self, child, event, event_ctx):
+    if child is not None:
+      response = self.send_event_child(child, event, event_ctx)
+      if event_used(response):
+        return self.handle_child_response(response, event_ctx)
+
+  def forward_event_to_focused_child(self, event, event_ctx):
+    return self.forward_event_to_child(self.focused_child, event, event_ctx)
+
+  def forward_event_to_child_under_cursor(self, event, event_ctx):
+    return self.forward_event_to_child(self.get_child_under_cursor(event_ctx), event, event_ctx)
+
+  def get_child_under_cursor(self, event_ctx):
+    children_under_cursor = self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
+    if children_under_cursor:
+      return children_under_cursor[-1]
+
   def get_children_under_cursor(self, event_ctx):
       return self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
 
   def get_children_at_pos(self, x, y):
     return [o for o in self.children if pt_in_rect(x, y, o.x, o.y, o.inner.width(), o.inner.height())]
 
-  def _maybe_drop_child(self, event_ctx, child, x, y, target):
+  def maybe_drop_child(self, event_ctx, child, x, y, target):
     if child is target:
       # Can't drop on self
       return
     if rect_in_rect(x, y, child.width(), child.height(),
                     target.x, target.y, target.inner.width(), target.inner.height()):
-      return self._drop_child(event_ctx, child, x, y, target)
+      return self.drop_child(event_ctx, child, x, y, target)
 
-  def _drop_child(self, event_ctx, child, x, y, target):
+  def drop_child(self, event_ctx, child, x, y, target):
     event = ReceiveChild(
       child        = child,
       child_xoff   = event_ctx.mouse_x - x,
@@ -231,6 +248,12 @@ class Container(Common):
       )
       return ACK
 
+  on_KeyPress_default = Common.forward_event_to_focused_child
+  on_MouseMove = Common.forward_event_to_child_under_cursor
+  on_MouseRelease = Common.forward_event_to_focused_child
+  on_DragStart = Common.forward_event_to_focused_child
+  on_DragStop  = Common.forward_event_to_focused_child
+
   def on_KeyPress_ESCAPE(self, event_ctx):
     if self.focused_child:
       response = self.send_event_child(self.focused_child, KeyPress(keys.ESCAPE), event_ctx)
@@ -239,12 +262,6 @@ class Container(Common):
       else:
         self._unfocus_child(self.focused_child)
         return ACK
-
-  def on_KeyPress_default(self, event, event_ctx):
-    if self.focused_child:
-      response = self.send_event_child(self.focused_child, event, event_ctx)
-      if event_used(response):
-        return response
 
   def on_ReceiveChild(self, event, event_ctx):
     self.focused_child = self.add_child(
@@ -263,16 +280,6 @@ class Container(Common):
         return response
     else:
       self._unfocus_child(self.focused_child)
-
-  def on_MouseMove(self, event, event_ctx):
-    receivers = self.get_children_under_cursor(event_ctx)
-    for child in receivers:
-        response = self.send_event_child(child, event, event_ctx)
-        if event_used(response):
-          return self.handle_child_response(response, event_ctx)
-
-  on_DragStart = Object.noop
-  on_DragStop = Object.noop
 
   def on_Drag(self, event, event_ctx):
     if self.focused_child is None:
@@ -295,19 +302,13 @@ class Container(Common):
 
     # Child on top of other child => drop?
     for target in reversed(self.children):
-      response = self._maybe_drop_child(event_ctx, self.focused_child.inner, self.focused_child.x, self.focused_child.y, target)
+      response = self.maybe_drop_child(event_ctx, self.focused_child.inner, self.focused_child.x, self.focused_child.y, target)
       if event_used(response):
         self._remove_child(self.focused_child)
         self.focused_child = target
         return self.handle_child_response(response, event_ctx)
 
     return ACK
-
-  def on_MouseRelease(self, event, event_ctx):
-    if self.focused_child:
-      response = self.send_event_child(self.focused_child, event, event_ctx)
-      if event_used(response):
-        return response
 
   def _unfocus_child(self, child):
     if self.focused_child is child:
@@ -413,23 +414,17 @@ class BesidesWidget(Common):
         raise TypeError("Don't know how to deal with child response %s" % response)
       return response.clone(former_parent=self)
 
-  def forward_event_to_focused_child(self, event, event_ctx):
-    return self.forward_event_to_child(self.focused_child, event, event_ctx)
-
-  def forward_event_to_child_under_cursor(self, event, event_ctx):
-    return self.forward_event_to_child(self.get_child_under_cursor(event_ctx), event, event_ctx)
-
-  on_KeyPress     = forward_event_to_focused_child
-  on_Drag         = forward_event_to_focused_child
-  on_DragStart    = forward_event_to_focused_child
-  on_DragStop     = forward_event_to_focused_child
-  on_MouseRelease = forward_event_to_focused_child
-  on_MouseMove    = forward_event_to_child_under_cursor
+  on_KeyPress     = Common.forward_event_to_focused_child
+  on_Drag         = Common.forward_event_to_focused_child
+  on_DragStart    = Common.forward_event_to_focused_child
+  on_DragStop     = Common.forward_event_to_focused_child
+  on_MouseRelease = Common.forward_event_to_focused_child
+  on_MouseMove    = Common.forward_event_to_child_under_cursor
 
   def on_ReceiveChild(self, event, event_ctx):
     # Child on top of other child => drop?
     for target in reversed(self.children):
-      response = self._maybe_drop_child(event_ctx, event.child, event_ctx.mouse_x - event.child_xoff, event_ctx.mouse_y - event.child_yoff, target)
+      response = self.maybe_drop_child(event_ctx, event.child, event_ctx.mouse_x - event.child_xoff, event_ctx.mouse_y - event.child_yoff, target)
       if event_used(response):
         self.focused_child = target
         return self.handle_child_response(response, event_ctx)
@@ -443,18 +438,6 @@ class BesidesWidget(Common):
         return self.handle_child_response(response, event_ctx)
       else:
         return ACK
-
-  def forward_event_to_child(self, child, event, event_ctx):
-    if child is not None:
-      response = self.send_event_child(child, event, event_ctx)
-      if event_used(response):
-        return self.handle_child_response(response, event_ctx)
-
-  def get_child_under_cursor(self, event_ctx):
-    children_under_cursor = self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y)
-    if children_under_cursor:
-      assert len(children_under_cursor) == 1
-      return children_under_cursor[0]
 
 
 class ProgramState:
