@@ -25,6 +25,12 @@ class PositionedChild:
     self.inner = inner
     self.x = x
     self.y = y
+
+  def width(self):
+    return self.inner.width()
+
+  def height(self):
+    return self.inner.height()
   
   def move(self, x, y):
     self.x = x
@@ -55,7 +61,6 @@ class Container(Object):
   on_KeyPress_default = forward_event_to_focused_child
   on_MouseRelease     = forward_event_to_focused_child
   on_DragStart        = forward_event_to_focused_child
-  on_DragStop         = forward_event_to_focused_child
   on_MouseMove        = forward_event_to_child_under_cursor
 
   def on_MousePress(self, event, event_ctx):
@@ -101,9 +106,8 @@ class Container(Object):
     self.raise_child(self.focused_child)
     self.focused_child.move_relative(event.xrel, event.yrel)
 
-    # Child out of bounding box?
-    if not rect_in_rect(self.focused_child.x, self.focused_child.y, self.focused_child.inner.width(), self.focused_child.inner.height(),
-                        0, 0, self.width(), self.height()):
+    # Cursor out of bounding box?
+    if not pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, 0, 0, self.width(), self.height()):
       return self.unparent_child(event_ctx, self.focused_child)
 
     target, child_response = self.maybe_drop_child(self.focused_child, event_ctx)
@@ -113,6 +117,14 @@ class Container(Object):
       return self.handle_child_response(child_response, event_ctx)
 
     return ACK
+
+  def on_DragStop(self, event, event_ctx):
+    for child in self.children:
+      child.move(
+        min(self.width() - child.width(), max(0, child.x)),
+        min(self.height() - child.height(), max(0, child.y))
+      )
+    return self.forward_event_to_child_under_cursor(event, event_ctx)
 
   def handle_child_response(self, response, event_ctx):
     if response is None:
@@ -161,8 +173,8 @@ class Container(Object):
           child.inner.draw(ctx)
         if self.focused_child is child:
           border = drawings.Rectangle(
-            width=child.inner.width()+4,
-            height=child.inner.height()+4,
+            width=child.width()+4,
+            height=child.height()+4,
             color=(0.3, 0.3, 0.8),
             fill='stroke'
           ).move(-2, -2)
@@ -190,7 +202,7 @@ class Container(Object):
       return self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y, exclude)
 
   def get_children_at_pos(self, x, y, exclude=()):
-    return [o for o in self.children if o not in exclude and pt_in_rect(x, y, o.x, o.y, o.inner.width(), o.inner.height())]
+    return [o for o in self.children if o not in exclude and pt_in_rect(x, y, o.x, o.y, o.width(), o.height())]
 
   def maybe_drop_child(self, child, event_ctx):
     target = self.get_drop_target(child, event_ctx)
@@ -207,6 +219,5 @@ class Container(Object):
 
   def get_drop_target(self, child, event_ctx):
     target = self.get_first_child_under_cursor(event_ctx, exclude={child})
-    if target is not None and rect_in_rect(child.x, child.y, child.inner.width(), child.inner.height(),
-                                           target.x, target.y, target.inner.width(), target.inner.height()):
+    if target is not None and pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, target.x, target.y, target.width(), target.height()):
       return target

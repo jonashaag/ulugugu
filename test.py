@@ -17,7 +17,7 @@ class BesidesWidget(Container):
     return False
 
   def update_child_positions(self):
-    self.children[1].x = self.children[0].inner.width()
+    self.children[1].x = self.children[0].width()
 
   def draw(self, ctx):
     super().draw(ctx)
@@ -47,8 +47,8 @@ class DropArea(Container):
 
   def update_child_positions(self):
     if self.children:
-      center_x = self.width()/2 - self.children[0].inner.width()/2
-      center_y = self.height()/2 - self.children[0].inner.height()/2
+      center_x = self.width()/2 - self.children[0].width()/2
+      center_y = self.height()/2 - self.children[0].height()/2
       self.children[0].x = center_x
       self.children[0].y = center_y
 
@@ -59,16 +59,17 @@ class DropArea(Container):
     if not self.children:
       return self.empty_width
     else:
-      return max(self.empty_width, self.children[0].inner.width() + 2 * self.border_width)
+      return max(self.empty_width, self.children[0].width() + 2 * self.border_width)
 
   def height(self):
     if not self.children:
       return self.empty_height
     else:
-      return max(self.empty_height, self.children[0].inner.height() + 2 * self.border_height)
+      return max(self.empty_height, self.children[0].height() + 2 * self.border_height)
 
   def on_DragStop(self, event, event_ctx):
     self.update_child_positions()
+    return super().on_DragStop(event, event_ctx)
 
   def draw(self, ctx):
     if not self.children:
