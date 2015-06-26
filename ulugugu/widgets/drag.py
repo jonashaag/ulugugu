@@ -1,4 +1,4 @@
-from ulugugu.widgets import Object
+from ulugugu.widgets import Widget
 from ulugugu.events import Event, send_event
 
 
@@ -18,7 +18,7 @@ class DragStop(Event):
   pass
 
 
-class DragWrapper(Object):
+class DragWrapper(Widget):
   def __init__(self, wrapped_obj):
     self.wrapped_obj = wrapped_obj
     self.drag_started = False

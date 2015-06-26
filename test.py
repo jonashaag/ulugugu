@@ -1,35 +1,6 @@
-from ulugugu import sdl, drawings, keys
+from ulugugu import sdl, drawings, keys, values
 from ulugugu.widgets import *
 from ulugugu.events import Event, ACK, send_event, event_used
-
-
-class BesidesWidget(Container):
-  can_move_children = False
-
-  def __init__(self, left, right):
-    self.width = lambda: left.width() + right.width()
-    self.height = lambda: max(left.height(), right.height())
-    self.focused_child = None
-    self.children = [PositionedChild(left, 0, 0),
-                     PositionedChild(right, left.width(), 0)]
-
-  def can_add_child(self, positioned_child):
-    return False
-
-  def update_child_positions(self):
-    self.children[1].x = self.children[0].width()
-
-  def draw(self, ctx):
-    super().draw(ctx)
-    drawings.Rectangle(
-      self.width(),
-      self.height(),
-      color=(0.9, 0.9, 0.9),
-      fill='stroke'
-    ).draw(ctx)
-    with ctx:
-      ctx.translate(self.width() - 20, 0)
-      drawings.Text(str(len(self.children))).draw(ctx)
 
 
 class DropArea(Container):
@@ -41,10 +12,6 @@ class DropArea(Container):
   border_height = 2
   border_color = (0.5, 0.5, 0.5)
 
-  def __init__(self):
-    self.children = []
-    self.focused_child = None
-
   def update_child_positions(self):
     if self.children:
       center_x = self.width()/2 - self.children[0].width()/2
@@ -54,6 +21,10 @@ class DropArea(Container):
 
   def can_add_child(self, positioned_child):
     return not self.children
+
+  def value(self):
+    if self.children:
+      return self.children[0].value()
 
   def width(self):
     if not self.children:
@@ -89,6 +60,24 @@ class DropArea(Container):
         super().draw(ctx)
 
 
+class ApplicationWidget(AboveWidget):
+  def __init__(self):
+    super().__init__(DropArea(), BesidesWidget(DropArea(), DropArea()), horizontal_alignment='center')
+
+  def value(self):
+    return values.Application(self.children[0].value(), *self.children[1].value())
+
+
+class ShowValueWidget(WidgetWrapper):
+  def height(self):
+    return self.child.height() + 15
+
+  def draw(self, ctx):
+    drawings.Text(str(self.value())).draw(ctx)
+    ctx.translate(0, 15)
+    self.child.draw(ctx)
+
+
 class ProgramState:
   def __init__(self, rootobj):
     self.rootobj = rootobj
@@ -104,10 +93,5 @@ class ProgramState:
 
 
 workspace = Workspace(700, 500)
-workspace2 = Workspace(200, 200)
-workspace2.children.append(PositionedChild(Workspace(100, 100), 20, 20))
-workspace.children.append(PositionedChild(BesidesWidget(workspace2, DropArea()), 150, 150))
-workspace.children.append(PositionedChild(DropArea(), 400, 300))
-workspace.children.append(PositionedChild(BesidesWidget(IntegerInput(), BesidesWidget(DropArea(), DropArea())), 10, 10))
-workspace.children.append(PositionedChild(Workspace(200, 200), 400, 400))
+workspace.children.append(PositionedChild(ShowValueWidget(ApplicationWidget()), 100, 100))
 sdl.main(ProgramState(DragWrapper(workspace)))

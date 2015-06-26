@@ -1,4 +1,7 @@
-class Object:
+from ulugugu.events import send_event
+
+
+class Widget:
   def handle_event(self, event, event_ctx):
     return self.dispatch_event(event, event_ctx)
 
@@ -16,5 +19,25 @@ class Object:
     else:
       return handler(event_ctx)
 
-  def noop(self, event, event_ctx):
+  def ignore(self, event, event_ctx):
     pass
+
+
+class WidgetWrapper(Widget):
+  def __init__(self, child):
+    self.child = child
+
+  def value(self):
+    return self.child.value()
+
+  def width(self):
+    return self.child.width()
+
+  def height(self):
+    return self.child.height()
+
+  def handle_event(self, event, event_ctx):
+    return send_event(self.child, event, event_ctx)
+
+  def draw(self, ctx):
+    return self.child.draw(ctx)

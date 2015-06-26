@@ -1,9 +1,14 @@
-from ulugugu import drawings, keys
+from ulugugu import drawings, keys, values
 from ulugugu.widgets import *
 from ulugugu.events import ACK
 
 
-class TextInput(Object):
+class InputWidget(Widget):
+  def on_ReceiveChild(self, event, event_ctx):
+    pass
+
+
+class TextInput(InputWidget):
   allowed_chars = None
 
   def __init__(self, text):
@@ -16,12 +21,12 @@ class TextInput(Object):
   def draw(self, ctx):
     drawings.Text(self.text).draw(ctx)
 
-  on_MousePress = Object.noop
-  on_MouseRelease = Object.noop
-  on_MouseMove = Object.noop
-  on_Drag = Object.noop
-  on_DragStart = Object.noop
-  on_DragStop = Object.noop
+  on_MousePress = Widget.ignore
+  on_MouseRelease = Widget.ignore
+  on_MouseMove = Widget.ignore
+  on_Drag = Widget.ignore
+  on_DragStart = Widget.ignore
+  on_DragStop = Widget.ignore
 
   def on_KeyPress_BACKSPACE(self, _):
     self.text = self.text[:-1]
@@ -49,6 +54,10 @@ class IntegerInput(TextInput):
     self.text = str(int(self.text) - 1)
     return ACK
 
+  def value(self):
+    return values.Integer(int(self.text))
+
 
 class StringInput(TextInput):
-  pass
+  def value(self):
+    return values.String(self.text)

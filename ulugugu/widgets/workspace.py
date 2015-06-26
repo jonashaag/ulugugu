@@ -6,10 +6,9 @@ from ulugugu.utils import rect_in_rect
 
 class Workspace(Container):
   def __init__(self, width, height):
+    super().__init__()
     self.width = lambda: width
     self.height = lambda: height
-    self.focused_child = None
-    self.children = []
 
   def update_child_positions(self):
     pass

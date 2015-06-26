@@ -1,7 +1,7 @@
 import abc
 from ulugugu import drawings
 from ulugugu.events import Event, ACK, send_event, event_used
-from ulugugu.widgets import Object
+from ulugugu.widgets import Widget, WidgetWrapper
 from ulugugu.utils import pt_in_rect, rect_in_rect
 
 
@@ -20,18 +20,12 @@ class UnparentChild(Event):
     self.child_yoff = child_yoff
 
 
-class PositionedChild:
-  def __init__(self, inner, x=0, y=0):
-    self.inner = inner
+class PositionedChild(WidgetWrapper):
+  def __init__(self, child, x=0, y=0):
+    super().__init__(child)
     self.x = x
     self.y = y
 
-  def width(self):
-    return self.inner.width()
-
-  def height(self):
-    return self.inner.height()
-  
   def move(self, x, y):
     self.x = x
     self.y = y
@@ -41,8 +35,13 @@ class PositionedChild:
     self.y += yoff
 
 
-class Container(Object):
+class Container(Widget):
   can_move_children = True
+
+  def __init__(self, children=None):
+    self.focused_child = None
+    self.children = children or []
+    self.update_child_positions()
 
   @abc.abstractmethod
   def update_child_positions(self):
@@ -152,7 +151,7 @@ class Container(Object):
   def unparent_child(self, event_ctx, child):
     event = UnparentChild(
       former_parent = self,
-      child         = child.inner,
+      child         = child.child,
       child_xoff    = event_ctx.mouse_x - child.x,
       child_yoff    = event_ctx.mouse_y - child.y,
     )
@@ -170,7 +169,7 @@ class Container(Object):
       with ctx:
         ctx.translate(child.x, child.y)
         with ctx:
-          child.inner.draw(ctx)
+          child.draw(ctx)
         if self.focused_child is child:
           border = drawings.Rectangle(
             width=child.width()+4,
@@ -185,7 +184,7 @@ class Container(Object):
       mouse_x=event_ctx.mouse_x - child.x,
       mouse_y=event_ctx.mouse_y - child.y,
     )
-    return send_event(child.inner, event, child_context)
+    return send_event(child, event, child_context)
 
   def forward_event_to_child(self, child, event, event_ctx):
     if child is not None:
@@ -208,7 +207,7 @@ class Container(Object):
     target = self.get_drop_target(child, event_ctx)
     if target is not None:
       event = ReceiveChild(
-        child        = child.inner,
+        child        = child.child,
         child_xoff   = event_ctx.mouse_x - child.x,
         child_yoff   = event_ctx.mouse_y - child.y,
       )
