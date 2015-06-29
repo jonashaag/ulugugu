@@ -3,6 +3,7 @@ from ulugugu import drawings
 from ulugugu.events import Event, ACK, send_event, event_used
 from ulugugu.widgets import Widget, WidgetWrapper
 from ulugugu.utils import pt_in_rect, rect_in_rect
+from functional import foldl
 
 
 class ReceiveChild(Event):
@@ -42,6 +43,21 @@ class Container(Widget):
     self.focused_child = None
     self.children = children or []
     self.update_child_positions()
+
+  def get_drawing(self):
+    def add_child_drawing(drawing, child):
+      child_drawing = drawings.MoveAbsolute(child.x, child.y, child.get_drawing())
+      if child is self.focused_child:
+        border = drawings.Rectangle(
+          width=child.width()+4,
+          height=child.height()+4,
+          color=(0.3, 0.3, 0.8),
+          fill='stroke'
+        )
+        child_drawing = drawings.Atop(drawings.MoveAbsolute(child.x-2, child.y-2, border), child_drawing)
+      return drawings.Atop(child_drawing, drawing)
+
+    return foldl(add_child_drawing, self.children, drawings.Empty())
 
   @abc.abstractmethod
   def update_child_positions(self):
@@ -164,21 +180,6 @@ class Container(Widget):
     self.children.remove(child)
     self.children.append(child)
 
-  def draw(self, ctx):
-    for child in self.children:
-      with ctx:
-        ctx.translate(child.x, child.y)
-        with ctx:
-          child.draw(ctx)
-        if self.focused_child is child:
-          border = drawings.Rectangle(
-            width=child.width()+4,
-            height=child.height()+4,
-            color=(0.3, 0.3, 0.8),
-            fill='stroke'
-          ).move(-2, -2)
-          border.draw(ctx)
-
   def send_event_child(self, child, event, event_ctx):
     child_context = event_ctx.clone(
       mouse_x=event_ctx.mouse_x - child.x,
@@ -193,7 +194,7 @@ class Container(Widget):
         return self.handle_child_response(response, event_ctx)
 
   def get_first_child_under_cursor(self, event_ctx, exclude=()):
-    children_under_cursor = self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y, exclude)
+    children_under_cursor = self.get_children_under_cursor(event_ctx, exclude)
     if children_under_cursor:
       return children_under_cursor[-1]
 
@@ -218,5 +219,6 @@ class Container(Widget):
 
   def get_drop_target(self, child, event_ctx):
     target = self.get_first_child_under_cursor(event_ctx, exclude={child})
-    if target is not None and pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, target.x, target.y, target.width(), target.height()):
+    if target is not None:
+      assert pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, target.x, target.y, target.width(), target.height())
       return target

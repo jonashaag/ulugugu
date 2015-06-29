@@ -16,6 +16,7 @@ def main(state):
 
 def loop(window, state):
   sdl_event = sdl2.SDL_Event()
+  should_redraw = True
 
   while True:
     while sdl2.SDL_PollEvent(ctypes.byref(sdl_event)):
@@ -26,9 +27,13 @@ def loop(window, state):
       if event:
         event_context = get_event_context()
         events.send_event(state, event, event_context)
+        should_redraw = True
 
-    draw_cairo(window, state.draw)
-    window.refresh()
+    if should_redraw:
+      draw_cairo(window, state.draw)
+      window.refresh()
+      should_redraw = False
+
     sdl2.SDL_Delay(10)
 
 

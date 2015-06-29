@@ -13,13 +13,9 @@ class TextInput(InputWidget):
 
   def __init__(self, text):
     self.text = text
-    self.height = lambda: 15
 
-  def width(self):
-    return len(self.text) * 8
-
-  def draw(self, ctx):
-    drawings.Text(self.text).draw(ctx)
+  def get_drawing(self):
+    return drawings.Text(self.text)
 
   on_MousePress = Widget.ignore
   on_MouseRelease = Widget.ignore
