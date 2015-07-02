@@ -1,5 +1,5 @@
 from ulugugu import drawings, keys, values
-from ulugugu.widgets import *
+from ulugugu.widgets import Widget
 from ulugugu.events import ACK
 
 

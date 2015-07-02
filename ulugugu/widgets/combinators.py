@@ -1,7 +1,16 @@
 from ulugugu import drawings
-from ulugugu.widgets import *
+from ulugugu.widgets import Widget, WidgetWrapper
+from ulugugu.widgets.drag import UnparentChild
 from ulugugu.utils import pt_in_rect
 from ulugugu.events import ACK, send_event, event_used
+
+
+class ChangeDrawing(WidgetWrapper):
+  def handle_event(self, event, event_ctx):
+    child_x, child_y = self.get_child_position()
+    event = event.for_child(child_x, child_y)
+    event_ctx = event_ctx.for_child(child_x, child_y)
+    return super().handle_event(event, event_ctx)
 
 
 class BesidesAboveWidget(Widget):
@@ -9,49 +18,58 @@ class BesidesAboveWidget(Widget):
     self.left = left
     self.right = right
     self.focused_child = None
+    self.dragging = None
 
   def value(self):
     return self.left.value(), self.right.value()
 
-  def forward_event_to_focused_child(self, event, event_ctx):
-    if self.focused_child:
-      return self.forward_event_to_child(self.focused_child, event, event_ctx)
+  def forward_event_to_focused_child(self, event, event_ctx, *args, **kwargs):
+    return self.forward_event_to_child(self.focused_child, event, event_ctx, *args, **kwargs)
 
-  def forward_event_to_child_under_cursor(self, event, event_ctx):
-    return self.forward_event_to_child(
-      self.get_child_under_cursor(event_ctx),
-      event,
-      event_ctx
-    )
-
-  def forward_event_to_child_under_cursor_and_set_focused(self, event, event_ctx):
-    child = self.get_child_under_cursor(event_ctx)
-    response = self.send_event_child(child, event, event_ctx)
-    if event_used(response):
-      self.focused_child = child
-      return self.handle_child_response(response, event_ctx)
+  def forward_event_to_child_under_cursor(self, event, event_ctx, *args, **kwargs):
+    return self.forward_event_to_child(self.get_child_under_cursor(event_ctx),
+                                       event, event_ctx, *args, **kwargs)
 
   on_KeyPress_default = forward_event_to_focused_child
   on_MouseRelease     = forward_event_to_focused_child
-  on_DragStart        = forward_event_to_focused_child
-  on_Drag             = forward_event_to_focused_child
-  on_DragStop         = forward_event_to_focused_child
   on_MouseMove        = forward_event_to_child_under_cursor
-  on_MousePress       = forward_event_to_child_under_cursor_and_set_focused
-  on_ReceiveChild     = forward_event_to_child_under_cursor_and_set_focused
 
-  def forward_event_to_child(self, child, event, event_ctx):
+  def on_MousePress(self, event, event_ctx):
+    def on_child_response(child, response):
+      self.focused_child = child
+    return self.forward_event_to_child_under_cursor(event, event_ctx, on_child_response)
+
+  def on_ReceiveChild(self, event, event_ctx):
+    def on_child_response(child, response):
+      self.focused_child = child
+      self.dragging = True
+    return self.forward_event_to_child_under_cursor(event, event_ctx, on_child_response)
+
+  def on_DragStart(self, event, event_ctx):
+    child = self.get_child_under_cursor(event_ctx)
+    self.dragging = child is not None
+    return self.forward_event_to_child(child, event, event_ctx)
+
+  def on_Drag(self, event, event_ctx):
+    if self.dragging:
+      return self.forward_event_to_focused_child(event, event_ctx)
+
+  def on_DragStop(self, event, event_ctx):
+    self.dragging = None
+    return self.forward_event_to_focused_child(event, event_ctx)
+
+  def forward_event_to_child(self, child, event, event_ctx, on_child_response=None):
+    if child is None:
+      return
     response = self.send_event_child(child, event, event_ctx)
     if event_used(response):
+      if on_child_response is not None:
+        on_child_response(child, response)
       return self.handle_child_response(response, event_ctx)
 
   def send_event_child(self, child, event, event_ctx):
     x, y = self.get_child_position(child)
-    child_context = event_ctx.clone(
-      mouse_x=event_ctx.mouse_x - x,
-      mouse_y=event_ctx.mouse_y - y,
-    )
-    return send_event(self.get_child(child), event, child_context)
+    return send_event(self.get_child(child), event.for_child(x, y), event_ctx.for_child(x, y))
 
   def handle_child_response(self, response, event_ctx):
     if response is ACK:
@@ -74,7 +92,6 @@ class BesidesAboveWidget(Widget):
       x, y = self.get_child_position(child)
       if pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, x, y, child_widget.width(), child_widget.height()):
         return child
-    raise AssertionError("No child at (%d,%d)" % (event_ctx.mouse_x, event_ctx.mouse_y))
 
 
 class Besides(BesidesAboveWidget):

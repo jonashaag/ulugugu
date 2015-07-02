@@ -3,7 +3,8 @@ from ulugugu import keys, Cloneable
 
 
 class Event(Cloneable):
-  pass
+  def for_child(self, child_x, child_y):
+    return self.clone()
 
 
 class ACK(Event):
@@ -42,7 +43,7 @@ class MouseRelease(MouseEvent):
   pass
 
 
-class KeyboardEvent:
+class KeyboardEvent(Event):
   def __init__(self, key):
     self.key = key
 
@@ -68,3 +69,9 @@ class Context(Cloneable):
   def __init__(self, mouse_x, mouse_y):
     self.mouse_x = mouse_x
     self.mouse_y = mouse_y
+
+  def for_child(self, child_x, child_y):
+    return self.clone(
+      mouse_x = self.mouse_x - child_x,
+      mouse_y = self.mouse_y - child_y
+    )

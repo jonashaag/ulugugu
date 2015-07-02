@@ -1,24 +1,10 @@
 import abc
 from ulugugu import drawings
-from ulugugu.events import Event, ACK, send_event, event_used
+from ulugugu.events import ACK, send_event, event_used
 from ulugugu.widgets import Widget, WidgetWrapper
-from ulugugu.utils import pt_in_rect, rect_in_rect
+from ulugugu.widgets.drag import UnparentChild, ReceiveChild
+from ulugugu.utils import pt_in_rect
 from functional import foldl
-
-
-class ReceiveChild(Event):
-  def __init__(self, child, child_xoff, child_yoff):
-    self.child = child
-    self.child_xoff = child_xoff
-    self.child_yoff = child_yoff
-
-
-class UnparentChild(Event):
-  def __init__(self, former_parent, child, child_xoff, child_yoff):
-    self.former_parent = former_parent
-    self.child = child
-    self.child_xoff = child_xoff
-    self.child_yoff = child_yoff
 
 
 class PositionedChild(WidgetWrapper):
@@ -49,8 +35,8 @@ class Container(Widget):
       child_drawing = drawings.MoveAbsolute(child.x, child.y, child.get_drawing())
       if child is self.focused_child:
         border = drawings.Rectangle(
-          width=child.width()+4,
-          height=child.height()+4,
+          width=child_drawing.width()+4,
+          height=child_drawing.height()+4,
           color=(0.3, 0.3, 0.8),
           fill='stroke'
         )
@@ -181,11 +167,7 @@ class Container(Widget):
     self.children.append(child)
 
   def send_event_child(self, child, event, event_ctx):
-    child_context = event_ctx.clone(
-      mouse_x=event_ctx.mouse_x - child.x,
-      mouse_y=event_ctx.mouse_y - child.y,
-    )
-    return send_event(child, event, child_context)
+    return send_event(child.child, event.for_child(child.x, child.y), event_ctx.for_child(child.x, child.y))
 
   def forward_event_to_child(self, child, event, event_ctx):
     if child is not None:
