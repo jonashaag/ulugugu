@@ -1,0 +1,12 @@
+#!/bin/sh
+pylint -d C \
+       -d too-many-format-args \
+       -d too-many-arguments \
+       -d too-few-arguments \
+       -d bad-indentation \
+       -d too-few-public-methods \
+       -d fixme \
+       -d no-self-use \
+       -d abstract-method \
+       -d no-member \
+       ulugugu/
