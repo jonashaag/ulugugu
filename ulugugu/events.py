@@ -17,6 +17,14 @@ def send_event(target, event, event_context):
 def event_used(response):
   return response is not None
 
+def try_handlers(handlers):
+  def event_handler(self, event, event_ctx):
+    for handler in handlers:
+      response = handler(self, event, event_ctx)
+      if event_used(response):
+        return response
+  return event_handler
+
 
 class MouseEvent(Event):
   pass

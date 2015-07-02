@@ -4,8 +4,10 @@ from ulugugu.events import ACK
 
 
 class InputWidget(Widget):
-  def on_ReceiveChild(self, event, event_ctx):
-    pass
+  on_ReceiveChild = Widget.ignore
+  on_Drag = Widget.ignore
+  on_DragStart = Widget.ignore
+  on_DragStop = Widget.ignore
 
 
 class TextInput(InputWidget):
@@ -20,9 +22,6 @@ class TextInput(InputWidget):
   on_MousePress = Widget.ignore
   on_MouseRelease = Widget.ignore
   on_MouseMove = Widget.ignore
-  on_Drag = Widget.ignore
-  on_DragStart = Widget.ignore
-  on_DragStop = Widget.ignore
 
   def on_KeyPress_BACKSPACE(self, _):
     self.text = self.text[:-1]

@@ -1,5 +1,5 @@
 import abc
-from ulugugu.events import send_event
+from ulugugu.events import Event, send_event
 
 
 class Widget(metaclass=abc.ABCMeta):
@@ -55,3 +55,17 @@ class WidgetWrapper(Widget):
 
   def get_drawing(self):
     return self.child.get_drawing()
+
+
+class Swap(Event):
+  def __init__(self, new_widget, event_response):
+    self.new_widget = new_widget
+    self.event_response = event_response
+
+class SwapWidget(WidgetWrapper):
+  def on_unhandled_event(self, event, event_ctx):
+    response = send_event(self.child, event, event_ctx)
+    if isinstance(response, Swap):
+      self.child = response.new_widget
+      response = response.event_response
+    return response
