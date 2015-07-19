@@ -1,7 +1,6 @@
 from ulugugu import drawings, keys
 from ulugugu.events import ACK, KeyPress, event_used
 from ulugugu.widgets.container import Container, PositionedChild
-from ulugugu.widgets.debug import DebugBoundingBox
 from ulugugu.widgets.input import StringInput, IntegerInput
 
 
@@ -16,8 +15,7 @@ class Workspace(Container):
 
   def get_drawing(self):
     border = drawings.Rectangle(
-      width=self._width,
-      height=self._height,
+      (self._width, self._height),
       color=(0.7, 0.7, 0.7),
       fill='stroke'
     )
@@ -38,7 +36,7 @@ class Workspace(Container):
       response = self.send_event_child(self.focused_child, KeyPress(keys.CHAR_T), event_ctx)
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
-    self.children.append(PositionedChild(DebugBoundingBox(StringInput("Some text")), 100, 100))
+    self.children.append(PositionedChild(StringInput("Some text"), (300, 300)))
     return ACK
 
   def on_KeyPress_CHAR_I(self, event_ctx):
@@ -46,7 +44,7 @@ class Workspace(Container):
       response = self.send_event_child(self.focused_child, KeyPress(keys.CHAR_I), event_ctx)
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
-    self.children.append(PositionedChild(IntegerInput(), 100, 100))
+    self.children.append(PositionedChild(IntegerInput(), (100, 100)))
     return ACK
 
   def on_KeyPress_ESCAPE(self, event_ctx):

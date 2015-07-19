@@ -1,25 +1,22 @@
 import abc
-from ulugugu import drawings
+from ulugugu import drawings, vec2
 from ulugugu.events import ACK, send_event, event_used
 from ulugugu.widgets import Widget, WidgetWrapper
 from ulugugu.widgets.drag import UnparentChild, ReceiveChild
-from ulugugu.utils import pt_in_rect
+from ulugugu.utils import cursor_over_drawing
 from functional import foldl
 
 
 class PositionedChild(WidgetWrapper):
-  def __init__(self, child, x=0, y=0):
+  def __init__(self, child, position):
     super().__init__(child)
-    self.x = x
-    self.y = y
+    self.position = position
 
-  def move(self, x, y):
-    self.x = x
-    self.y = y
+  def move(self, newpos):
+    self.position = newpos
 
-  def move_relative(self, xoff, yoff):
-    self.x += xoff
-    self.y += yoff
+  def move_relative(self, offset):
+    self.position = vec2.add(self.position, offset)
 
 
 class Container(Widget):
@@ -32,16 +29,16 @@ class Container(Widget):
 
   def get_drawing(self):
     def add_child_drawing(drawing, child):
-      child_drawing = drawings.MoveAbsolute(child.x, child.y, child.get_drawing())
+      child_drawing = child.get_drawing()
       if child is self.focused_child:
+        l, t, _, _ = child_drawing.boundingbox
         border = drawings.Rectangle(
-          width=child_drawing.width()+4,
-          height=child_drawing.height()+4,
-          color=(0.3, 0.3, 0.8),
+          (child_drawing.width + 4, child_drawing.height + 4),
+          (0.3, 0.3, 0.8),
           fill='stroke'
-        )
-        child_drawing = drawings.Atop(drawings.MoveAbsolute(child.x-2, child.y-2, border), child_drawing)
-      return drawings.Atop(child_drawing, drawing)
+        ).move((l - 2, t - 2))
+        child_drawing = drawings.Atop(border, child_drawing)
+      return drawings.Atop(child_drawing.move(child.position), drawing)
 
     return foldl(add_child_drawing, self.children, drawings.Empty())
 
@@ -57,15 +54,16 @@ class Container(Widget):
     return self.forward_event_to_child(self.focused_child, event, event_ctx)
 
   def forward_event_to_child_under_cursor(self, event, event_ctx):
-    return self.forward_event_to_child(self.get_first_child_under_cursor(event_ctx), event, event_ctx)
+    return self.forward_event_to_child(self.get_child_under_cursor(event_ctx), event, event_ctx)
 
   on_KeyPress_default = forward_event_to_focused_child
   on_MouseRelease     = forward_event_to_focused_child
   on_DragStart        = forward_event_to_focused_child
+  on_DragStop         = forward_event_to_child_under_cursor
   on_MouseMove        = forward_event_to_child_under_cursor
 
   def on_MousePress(self, event, event_ctx):
-    child = self.get_first_child_under_cursor(event_ctx)
+    child = self.get_child_under_cursor(event_ctx)
     self.focused_child = child
     if child:
       response = self.send_event_child(child, event, event_ctx)
@@ -77,8 +75,7 @@ class Container(Widget):
   def on_ReceiveChild(self, event, event_ctx):
     positioned_child = PositionedChild(
       event.child,
-      event_ctx.mouse_x - event.child_xoff,
-      event_ctx.mouse_y - event.child_yoff,
+      vec2.sub(event_ctx.mouse_position, event.child_offset),
     )
 
     # Try drop on child
@@ -105,10 +102,10 @@ class Container(Widget):
       return
 
     self.raise_child(self.focused_child)
-    self.focused_child.move_relative(event.xrel, event.yrel)
+    self.focused_child.move_relative(event.relative_movement)
 
     # Cursor out of bounding box?
-    if not pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, 0, 0, self.width(), self.height()):
+    if not cursor_over_drawing(self.get_drawing(), event_ctx):
       return self.unparent_child(event_ctx, self.focused_child)
 
     target, child_response = self.maybe_drop_child(self.focused_child, event_ctx)
@@ -118,14 +115,6 @@ class Container(Widget):
       return self.handle_child_response(child_response, event_ctx)
 
     return ACK
-
-  def on_DragStop(self, event, event_ctx):
-    for child in self.children:
-      child.move(
-        min(self.width() - child.width(), max(0, child.x)),
-        min(self.height() - child.height(), max(0, child.y))
-      )
-    return self.forward_event_to_child_under_cursor(event, event_ctx)
 
   def handle_child_response(self, response, event_ctx):
     if response is None:
@@ -137,8 +126,7 @@ class Container(Widget):
       elif isinstance(response, UnparentChild):
         positioned_child = PositionedChild(
           response.child,
-          event_ctx.mouse_x - response.child_xoff,
-          event_ctx.mouse_y - response.child_yoff
+          vec2.sub(event_ctx.mouse_position, response.child_offset),
         )
 
         if self.can_add_child(positioned_child):
@@ -154,8 +142,7 @@ class Container(Widget):
     event = UnparentChild(
       former_parent = self,
       child         = child.child,
-      child_xoff    = event_ctx.mouse_x - child.x,
-      child_yoff    = event_ctx.mouse_y - child.y,
+      child_offset  = vec2.sub(event_ctx.mouse_position, child.position),
     )
     self.children.remove(self.focused_child)
     self.focused_child = None
@@ -167,7 +154,7 @@ class Container(Widget):
     self.children.append(child)
 
   def send_event_child(self, child, event, event_ctx):
-    return send_event(child.child, event.for_child(child.x, child.y), event_ctx.for_child(child.x, child.y))
+    return send_event(child.child, event.for_child(child.position), event_ctx.for_child(child.position))
 
   def forward_event_to_child(self, child, event, event_ctx):
     if child is not None:
@@ -175,32 +162,21 @@ class Container(Widget):
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
 
-  def get_first_child_under_cursor(self, event_ctx, exclude=()):
-    children_under_cursor = self.get_children_under_cursor(event_ctx, exclude)
-    if children_under_cursor:
-      return children_under_cursor[-1]
-
-  def get_children_under_cursor(self, event_ctx, exclude=()):
-      return self.get_children_at_pos(event_ctx.mouse_x, event_ctx.mouse_y, exclude)
-
-  def get_children_at_pos(self, x, y, exclude=()):
-    return [o for o in self.children if o not in exclude and pt_in_rect(x, y, o.x, o.y, o.width(), o.height())]
+  def get_child_under_cursor(self, event_ctx, exclude=()):
+    for child in reversed(self.children):
+      if child in exclude:
+        continue
+      if cursor_over_drawing(child.get_drawing(), event_ctx, offset=child.position):
+        return child
 
   def maybe_drop_child(self, child, event_ctx):
-    target = self.get_drop_target(child, event_ctx)
+    target = self.get_child_under_cursor(event_ctx, exclude={child})
     if target is not None:
       event = ReceiveChild(
         child        = child.child,
-        child_xoff   = event_ctx.mouse_x - child.x,
-        child_yoff   = event_ctx.mouse_y - child.y,
+        child_offset = vec2.sub(event_ctx.mouse_position, child.position),
       )
       response = self.send_event_child(target, event, event_ctx)
       if event_used(response):
         return target, response
     return None, None
-
-  def get_drop_target(self, child, event_ctx):
-    target = self.get_first_child_under_cursor(event_ctx, exclude={child})
-    if target is not None:
-      assert pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, target.x, target.y, target.width(), target.height())
-      return target

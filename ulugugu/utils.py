@@ -1,7 +1,6 @@
-def pt_in_rect(x, y, rx, ry, rw, rh):
-  return rx <= x < rx+rw and ry <= y < ry+rh
+from ulugugu import vec2
 
 
-def rect_in_rect(x1, y1, w1, h1, x2, y2, w2, h2):
-  return x2 <= x1 <= x1 + w1 < x2 + w2 and \
-         y2 <= y1 <= y1 + h1 < y2 + h2
+def cursor_over_drawing(drawing, event_ctx, offset=(0, 0)):
+  l, t, r, b = drawing.boundingbox
+  return vec2.le((l, t), vec2.sub(event_ctx.mouse_position, offset), (r, b))

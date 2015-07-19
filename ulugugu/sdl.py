@@ -66,4 +66,4 @@ def get_mouse_state():
 
 
 def get_event_context():
-  return events.Context(*get_mouse_state())
+  return events.Context(get_mouse_state())

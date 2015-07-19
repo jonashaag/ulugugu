@@ -12,6 +12,7 @@ class Widget(metaclass=abc.ABCMeta):
     pass
 
   def width(self):
+    # XXX remove
     return self.get_drawing().width()
 
   def height(self):

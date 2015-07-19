@@ -1,9 +1,9 @@
 import sdl2
-from ulugugu import keys, Cloneable
+from ulugugu import keys, vec2, Cloneable
 
 
 class Event(Cloneable):
-  def for_child(self, child_x, child_y):
+  def for_child(self, child_position):
     return self.clone()
 
 
@@ -31,10 +31,9 @@ class MouseEvent(Event):
   pass
 
 class MouseMove(MouseEvent):
-  def __init__(self, xrel, yrel):
+  def __init__(self, relative_movement):
     super().__init__()
-    self.xrel = xrel
-    self.yrel = yrel
+    self.relative_movement = relative_movement
 
 class MousePress(MouseEvent):
   pass
@@ -62,16 +61,12 @@ def from_sdl_event(sdl_event):
   elif sdl_event.type == sdl2.SDL_MOUSEBUTTONUP:
     return MouseRelease()
   elif sdl_event.type == sdl2.SDL_MOUSEMOTION:
-    return MouseMove(sdl_event.motion.xrel, sdl_event.motion.yrel)
+    return MouseMove((sdl_event.motion.xrel, sdl_event.motion.yrel))
 
 
 class Context(Cloneable):
-  def __init__(self, mouse_x, mouse_y):
-    self.mouse_x = mouse_x
-    self.mouse_y = mouse_y
+  def __init__(self, mouse_position):
+    self.mouse_position = mouse_position
 
-  def for_child(self, child_x, child_y):
-    return self.clone(
-      mouse_x = self.mouse_x - child_x,
-      mouse_y = self.mouse_y - child_y
-    )
+  def for_child(self, child_position):
+    return self.clone(mouse_position=vec2.sub(self.mouse_position, child_position))

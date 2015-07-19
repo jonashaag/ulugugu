@@ -1,8 +1,8 @@
-from ulugugu import drawings
+from ulugugu import drawings, vec2
 from ulugugu.widgets import Widget, Swap, SwapWidget
 from ulugugu.widgets.drag import UnparentChild
 from ulugugu.widgets.container import PositionedChild
-from ulugugu.utils import pt_in_rect
+from ulugugu.utils import cursor_over_drawing
 from ulugugu.events import ACK, send_event, event_used
 
 
@@ -11,15 +11,14 @@ class EmptyDropArea(Widget):
     return None
 
   def get_drawing(self):
-    return drawings.Rectangle(50, 50, (0.8, 0.8, 0.8))
+    return drawings.Rectangle((50, 50), (0.8, 0.8, 0.8))
 
   def on_ReceiveChild(self, event, event_ctx):
     return Swap(
       FilledDropArea(
         PositionedChild(
           event.child,
-          event_ctx.mouse_x - event.child_xoff,
-          event_ctx.mouse_y - event.child_yoff,
+          vec2.sub(event_ctx.mouse_position, event.child_offset),
         )
       ),
       ACK
@@ -44,19 +43,17 @@ class FilledDropArea(Widget):
 
   def get_drawing(self):
     child_drawing = self.child.get_drawing()
-    return drawings.Atop(
-      drawings.MoveAbsolute(self.child.x, self.child.y, child_drawing),
-      drawings.Rectangle(
-        max(50, child_drawing.width()),
-        max(50, child_drawing.height()),
-        (0.5, 0.5, 0.5),
-        fill='stroke'
-      )
+    area_drawing = drawings.Rectangle(
+      (max(50, child_drawing.width), max(50, child_drawing.height)),
+      (0.5, 0.5, 0.5),
+      fill='stroke'
     )
+    return drawings.Atop(child_drawing.move(self.child.position), area_drawing) \
+              .set_boundingbox(area_drawing.boundingbox)
 
   def forward_event_to_child(self, event, event_ctx):
-    return send_event(self.child.child, event.for_child(self.child.x, self.child.y),
-                                        event_ctx.for_child(self.child.x, self.child.y))
+    return send_event(self.child.child, event.for_child(self.child.position),
+                                        event_ctx.for_child(self.child.position))
 
   on_KeyPress_default = forward_event_to_child
   on_MousePress       = forward_event_to_child
@@ -70,7 +67,7 @@ class FilledDropArea(Widget):
     return response
 
   def on_DragStart(self, event, event_ctx):
-    if pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, self.child.x, self.child.y, self.child.width(), self.child.height()):
+    if cursor_over_drawing(self.child.get_drawing(), event_ctx, self.child.position):
       self.dragging = True
     return self.forward_event_to_child(event, event_ctx)
 
@@ -82,16 +79,15 @@ class FilledDropArea(Widget):
     if event_used(response):
       return response
 
-    self.child.move_relative(event.xrel, event.yrel)
+    self.child.move_relative(event.relative_movement)
     # Cursor out of bounding box?
-    if not pt_in_rect(event_ctx.mouse_x, event_ctx.mouse_y, 0, 0, self.get_drawing().width(), self.get_drawing().height()):
+    if not cursor_over_drawing(self.get_drawing(), event_ctx):
       return Swap(
         EmptyDropArea(),
         UnparentChild(
           former_parent = self,
           child         = self.child.child,
-          child_xoff    = event_ctx.mouse_x - self.child.x,
-          child_yoff    = event_ctx.mouse_y - self.child.y,
+          child_offset  = vec2.sub(event_ctx.mouse_position, self.child.position)
         )
       )
     else:
@@ -99,7 +95,17 @@ class FilledDropArea(Widget):
 
   def on_DragStop(self, event, event_ctx):
     self.dragging = False
+    self._center_child()
     return self.forward_event_to_child(event, event_ctx)
+
+  def _center_child(self):
+    drawing = self.get_drawing()
+    child_drawing = self.child.get_drawing()
+    l1, t1, _, _ = child_drawing.boundingbox
+    l2, t2, _, _ = child_drawing.align(0.5, 0.5).boundingbox
+    xcenter = drawing.width/2
+    ycenter = drawing.height/2
+    self.child.move(vec2.add((xcenter, ycenter), (l2-l1, t2-t1)))
 
 
 class DropArea(SwapWidget):
