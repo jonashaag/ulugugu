@@ -1,16 +1,28 @@
+import abc
 from ulugugu import drawings
-from ulugugu.widgets import Widget
+from ulugugu.widgets import Widget, WidgetWrapper
 from ulugugu.widgets.drag import UnparentChild
 from ulugugu.utils import cursor_over_drawing
 from ulugugu.events import ACK, send_event, event_used
 
 
+class ChangeDrawing(WidgetWrapper, metaclass=abc.ABCMeta):
+  @abc.abstractmethod
+  def get_child_position(self):
+    pass
+
+  def on_unhandled_event(self, event, event_ctx):
+    return send_event(self.child, event.for_child(self.get_child_position()),
+                                  event_ctx.for_child(self.get_child_position()))
+
+
 class Atop(Widget):
   drawing_combinator = drawings.Atop
 
-  def __init__(self, fst, snd):
+  def __init__(self, fst, snd, **kwargs):
     self.fst = fst
     self.snd = snd
+    self.drawing_kwargs = kwargs
     self.focused_child = None
     self.dragging = None
 
@@ -18,7 +30,11 @@ class Atop(Widget):
     return self.fst.value(), self.snd.value()
 
   def get_drawing(self):
-    return self.drawing_combinator(self.fst.get_drawing(), self.snd.get_drawing())
+    return self.drawing_combinator(
+      self.fst.get_drawing(),
+      self.snd.get_drawing(),
+      **self.drawing_kwargs
+    )
 
   def forward_event_to_focused_child(self, event, event_ctx, *args, **kwargs):
     return self.forward_event_to_child(self.focused_child, event, event_ctx, *args, **kwargs)
@@ -84,9 +100,9 @@ class Atop(Widget):
   def get_child_drawing(self, child):
     drawing = self.get_drawing()
     if child is self.fst:
-      return drawing.children[0]
+      return drawing.fst
     else:
-      return drawing.children[1]
+      return drawing.snd
 
 
 class Besides(Atop):

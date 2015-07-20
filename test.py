@@ -11,12 +11,16 @@ from ulugugu.events import send_event
 
 
 class ApplicationWidget(Above):
- def __init__(self):
-   super().__init__(DropArea(), Besides(DropArea(), DropArea()))
+  def __init__(self):
+    super().__init__(
+      DropArea(),
+      Besides(DropArea(), DropArea()),
+      horizontal_alignment=0.5
+    )
 
- def value(self):
-   abstraction, args = super().value()
-   return values.Application(abstraction, *args)
+  def value(self):
+    abstraction, args = super().value()
+    return values.Application(abstraction, *args)
 
 
 class ProgramState:
@@ -31,13 +35,9 @@ class ProgramState:
       ctx.set_source_rgb(1,1,1)
       ctx.paint()
     with ctx:
-      self.rootobj.get_drawing().draw(ctx)
+      self.rootobj.get_drawing().align(0, 0).draw(ctx)
 
 
 workspace = Workspace(700, 500)
-workspace.children.append(PositionedChild(Besides(DropArea(), DropArea()), (100, 250)))
-workspace.children.append(PositionedChild(Above(DropArea(), DropArea()), (300, 250)))
-workspace.children.append(PositionedChild(DebugBoundingBox(DropArea()), (100, 100)))
-workspace.children.append(PositionedChild(DebugBoundingBox(StaticWidget(drawings.Rectangle((30, 30), (0.5, 0.5, 0.5)).move_origin((10, 20)))), (100, 100)))
-workspace.children.append(PositionedChild(DebugBoundingBox(StringInput("debug")), (200, 200)))
+workspace.children.append(PositionedChild(DebugBoundingBox(ApplicationWidget()), (0, 0)))
 sdl.main(ProgramState(DragWrapper(workspace)))

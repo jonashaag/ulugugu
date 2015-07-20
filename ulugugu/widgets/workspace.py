@@ -1,10 +1,30 @@
 from ulugugu import drawings, keys
 from ulugugu.events import ACK, KeyPress, event_used
+from ulugugu.widgets import ChangeDrawing
 from ulugugu.widgets.container import Container, PositionedChild
 from ulugugu.widgets.input import StringInput, IntegerInput
 
 
-class Workspace(Container):
+class Workspace(ChangeDrawing):
+  def __init__(self, width, height):
+    super().__init__(WorkspaceContainer(width, height))
+
+  @property
+  def children(self):
+    return self.child.children
+
+  def get_drawing(self):
+    container_drawing = self.child.get_drawing()
+    child_counter = drawings.Text(str(len(self.child.children)))
+    return drawings.Above(child_counter, container_drawing)
+
+  def get_child_position(self):
+    drawing = self.get_drawing()
+    l, t, _, _ = drawing.snd.boundingbox
+    return -l, -t
+
+
+class WorkspaceContainer(Container):
   def __init__(self, width, height):
     super().__init__()
     self._width = width
@@ -13,23 +33,20 @@ class Workspace(Container):
   def value(self):
     pass
 
+  def update_child_positions(self):
+    pass
+
+  def can_add_child(self, positioned_child):
+    return True
+
   def get_drawing(self):
     border = drawings.Rectangle(
       (self._width, self._height),
       color=(0.7, 0.7, 0.7),
       fill='stroke'
     )
-    child_counter = drawings.Text(str(len(self.children)))
-    return drawings.Atop(
-      drawings.Above(child_counter, border),
-      super().get_drawing()
-    )
-
-  def update_child_positions(self):
-    pass
-
-  def can_add_child(self, positioned_child):
-    return True
+    return drawings.Atop(border, super().get_drawing()) \
+              .clone(boundingbox=border.boundingbox)
 
   def on_KeyPress_CHAR_T(self, event_ctx):
     if self.focused_child:

@@ -49,7 +49,7 @@ class FilledDropArea(Widget):
       fill='stroke'
     )
     return drawings.Atop(child_drawing.move(self.child.position), area_drawing) \
-              .set_boundingbox(area_drawing.boundingbox)
+              .clone(boundingbox=area_drawing.boundingbox)
 
   def forward_event_to_child(self, event, event_ctx):
     return send_event(self.child.child, event.for_child(self.child.position),

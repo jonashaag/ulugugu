@@ -32,22 +32,19 @@ class Drawing(Cloneable, metaclass=abc.ABCMeta):
     l, t, r, b = self.boundingbox
     return self.clone(boundingbox=(l+xoff, t+yoff, r+xoff, b+yoff))
 
-  def set_boundingbox(self, new_boundingbox):
-    return self.clone(boundingbox=new_boundingbox)
-
   def align(self, horizontal, vertical):
     return self.align_horizontal(horizontal) \
                .align_vertical(vertical)
 
   def align_horizontal(self, alignment):
-    _, t, _, b = self.boundingbox
-    x = self.width * alignment
-    return self.set_boundingbox((-x, t, -x+self.width, b))
+    l, _, _, _ = self.boundingbox
+    xdiff = -l - self.width * alignment
+    return self.move((xdiff, 0))
 
   def align_vertical(self, alignment):
-    l, _, r, _ = self.boundingbox
-    y = self.height * alignment
-    return self.set_boundingbox((l, -y, r, -y+self.height))
+    _, t, _, _ = self.boundingbox
+    ydiff = -t - self.height * alignment
+    return self.move((0, ydiff))
 
 
 class Empty(Drawing):
@@ -78,10 +75,10 @@ class Text(Drawing):
     super().__init__((0, -15, len(self.text)*8, 0))
 
   def draw(self, ctx):
-    l, t, *_ = self.boundingbox
+    l, t, _, _ = self.boundingbox
     ctx.set_source_rgb(0,0,0)
-    ctx.set_font_size(15)
-    ctx.move_to(l, t+15)
+    ctx.set_font_size(self.height)
+    ctx.move_to(l, t+self.height)
     ctx.show_text(self.text)
     ctx.new_path()
 
@@ -94,30 +91,35 @@ class Atop(Drawing):
     l1, t1, r1, b1 = fst.boundingbox
     l2, t2, r2, b2 = snd.boundingbox
     super().__init__((min(l1, l2), min(t1, t2), max(r1, r2), max(b1, b2)))
-    self.children = (fst, snd)
+    self.fst = fst
+    self.snd = snd
 
   def move(self, offset):
-    return super().move(offset).clone(children=(self.children[0].move(offset),
-                                                self.children[1].move(offset)))
+    return super().move(offset).clone(fst=self.fst.move(offset), snd=self.snd.move(offset))
 
   def draw(self, ctx):
-    for child in reversed(self.children):
-      with ctx:
-        child.draw(ctx)
+    with ctx: self.snd.draw(ctx)
+    with ctx: self.fst.draw(ctx)
 
   def __repr__(self):
-    return '<%s %s>' % (self.__class__.__name__, self.children)
+    return '<%s %s>' % (self.__class__.__name__, [self.fst, self.snd])
 
 
 class Above(Atop):
-  def __init__(self, top, bottom):
+  def __init__(self, top, bottom, horizontal_alignment=None):
+    if horizontal_alignment is not None:
+      top = top.align_horizontal(horizontal_alignment)
+      bottom = bottom.align_horizontal(horizontal_alignment)
     _, _, _, b = top.boundingbox
     _, t, _, _ = bottom.boundingbox
     super().__init__(top, bottom.move((0, b - t)))
 
 
 class Besides(Atop):
-  def __init__(self, left, right):
+  def __init__(self, left, right, vertical_alignment=None):
+    if vertical_alignment is not None:
+      left = left.align_vertical(vertical_alignment)
+      right = right.align_vertical(vertical_alignment)
     _, _, r, _ = left.boundingbox
     l, _, _, _ = right.boundingbox
     super().__init__(left, right.move((r - l, 0)))
