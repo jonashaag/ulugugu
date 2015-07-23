@@ -1,30 +1,10 @@
 from ulugugu import drawings, keys
 from ulugugu.events import ACK, KeyPress, event_used
-from ulugugu.widgets import ChangeDrawing
-from ulugugu.widgets.container import Container, PositionedChild
+from ulugugu.widgets.container import Container
 from ulugugu.widgets.input import StringInput, IntegerInput
 
 
-class Workspace(ChangeDrawing):
-  def __init__(self, width, height):
-    super().__init__(WorkspaceContainer(width, height))
-
-  @property
-  def children(self):
-    return self.child.children
-
-  def get_drawing(self):
-    container_drawing = self.child.get_drawing()
-    child_counter = drawings.Text(str(len(self.child.children)))
-    return drawings.Above(child_counter, container_drawing)
-
-  def get_child_position(self):
-    drawing = self.get_drawing()
-    l, t, _, _ = drawing.snd.boundingbox
-    return -l, -t
-
-
-class WorkspaceContainer(Container):
+class Workspace(Container):
   def __init__(self, width, height):
     super().__init__()
     self._width = width
@@ -53,7 +33,7 @@ class WorkspaceContainer(Container):
       response = self.send_event_child(self.focused_child, KeyPress(keys.CHAR_T), event_ctx)
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
-    self.children.append(PositionedChild(StringInput("Some text"), (300, 300)))
+    self.add_child(StringInput("Some text"), (300, 300))
     return ACK
 
   def on_KeyPress_CHAR_I(self, event_ctx):
@@ -61,7 +41,7 @@ class WorkspaceContainer(Container):
       response = self.send_event_child(self.focused_child, KeyPress(keys.CHAR_I), event_ctx)
       if event_used(response):
         return self.handle_child_response(response, event_ctx)
-    self.children.append(PositionedChild(IntegerInput(), (100, 100)))
+    self.add_child(IntegerInput(), (100, 100))
     return ACK
 
   def on_KeyPress_ESCAPE(self, event_ctx):

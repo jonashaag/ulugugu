@@ -9,4 +9,5 @@ pylint -d C \
        -d no-self-use \
        -d abstract-method \
        -d no-member \
+       -d unused-argument \
        ulugugu/
