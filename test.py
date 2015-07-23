@@ -23,8 +23,7 @@ class ApplicationWidget(Above):
 
 class ProgramState:
   def __init__(self, rootobj):
-    #self.rootobj = Align(rootobj, 0, 0)
-    self.rootobj = rootobj
+    self.rootobj = Align(rootobj, (0, 0))
 
   def handle_event(self, event, event_ctx):
     if hasattr(event, 'key') and event.key == 'CHAR_R':
@@ -41,6 +40,7 @@ class ProgramState:
 
 workspace = Workspace(700, 500)
 workspace.add_child(ApplicationWidget(), (100, 100))
+workspace.add_child(StaticWidget(drawings.Rectangle((100,10), (0,0,0))), (200, 100))
 sdl.main(ProgramState(DragWrapper(workspace)))
 
 #sdl.main(ProgramState(Above(ChangingSizeWidget(), MouseoverWidget())))

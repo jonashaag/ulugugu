@@ -1,10 +1,31 @@
 from ulugugu import drawings, keys
-from ulugugu.events import ACK, KeyPress, event_used
+from ulugugu.events import ACK, KeyPress, event_used, send_event
+from ulugugu.widgets import Widget, StaticWidget, Above
 from ulugugu.widgets.container import Container
 from ulugugu.widgets.input import StringInput, IntegerInput
 
 
-class Workspace(Container):
+class Workspace(Widget):
+  def __init__(self, width, height):
+    self.container = WorkspaceContainer(width, height)
+
+  def on_unhandled_event(self, event, event_ctx):
+    return send_event(self.container, event, event_ctx)
+
+  def add_child(self, child, offset):
+    self.container.add_child(child, offset)
+
+  def value(self):
+    return self._get_widget().value()[1]
+
+  def get_drawing(self):
+    return self._get_widget().get_drawing()
+
+  def _get_widget(self):
+    return Above(StaticWidget(drawings.Text(str(len(self.container.children)))), self.container)
+
+
+class WorkspaceContainer(Container):
   def __init__(self, width, height):
     super().__init__()
     self._width = width
@@ -12,12 +33,6 @@ class Workspace(Container):
 
   def value(self):
     pass
-
-  def update_child_positions(self):
-    pass
-
-  def can_add_child(self, positioned_child):
-    return True
 
   def get_drawing(self):
     border = drawings.Rectangle(

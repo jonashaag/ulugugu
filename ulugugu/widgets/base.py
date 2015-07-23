@@ -2,7 +2,6 @@ import abc
 from ulugugu import drawings, vec2
 from ulugugu.events import send_event, event_used, ACK
 from ulugugu.utils import cursor_over_drawing
-from ulugugu.widgets.drag import UnparentChild
 
 
 class Widget(metaclass=abc.ABCMeta):
@@ -153,21 +152,13 @@ class Atop(Widget):
     if event_used(response):
       if on_child_response is not None:
         on_child_response(child, response)
-      return self.handle_child_response(response, event_ctx)
+    return response
 
   def send_event_child(self, child, event, event_ctx):
     if child is self.snd:
       event = event.for_child(self.get_snd_child_offset())
       event_ctx = event_ctx.for_child(self.get_snd_child_offset())
     return send_event(child, event, event_ctx)
-
-  def handle_child_response(self, response, event_ctx):
-    if response is ACK:
-      return ACK
-    elif isinstance(response, UnparentChild):
-      return response.clone(former_parent=self)
-    else:
-      raise TypeError("Don't know how to deal with child response %s" % response)
 
   def get_child_under_cursor(self, event_ctx):
     for child, offset in [

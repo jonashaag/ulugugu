@@ -1,5 +1,6 @@
 from ulugugu.widgets import Widget
 
+
 class StaticWidget(Widget):
   def __init__(self, drawing):
     self.drawing = drawing

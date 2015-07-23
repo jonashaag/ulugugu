@@ -103,7 +103,6 @@ class FilledDropArea(Widget):
       return Swap(
         EmptyDropArea(),
         UnparentChild(
-          former_parent = self,
           child         = self.child.widget,
           child_offset  = vec2.sub(event_ctx.mouse_position, self.child.offset)
         )

@@ -34,8 +34,7 @@ class ReceiveChild(Event):
 
 
 class UnparentChild(Event):
-  def __init__(self, former_parent, child, child_offset):
-    self.former_parent = former_parent
+  def __init__(self, child, child_offset):
     self.child = child
     self.child_offset = child_offset
 

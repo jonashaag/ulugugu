@@ -13,7 +13,6 @@ class Container(Widget):
   def __init__(self, children=None):
     self.focused_child = None
     self.children = children or []
-    self.update_child_positions()
 
   def add_child(self, widget, offset=(0, 0)):
     self.children.append(Move(widget, offset))
@@ -35,14 +34,6 @@ class Container(Widget):
       return drawings.Atop(child_drawing, drawing)
 
     return foldl(add_child_drawing, self.children, drawings.Empty())
-
-  @abc.abstractmethod
-  def update_child_positions(self):
-    pass
-
-  @abc.abstractmethod
-  def can_add_child(self, positioned_child):
-    pass
 
   def forward_event_to_focused_child(self, event, event_ctx):
     return self.forward_event_to_child(self.focused_child, event, event_ctx)
@@ -78,11 +69,10 @@ class Container(Widget):
       self.focused_child = target
       return self.handle_child_response(child_response, event_ctx)
 
-    # Try drop on self
-    if self.can_add_child(positioned_child):
-      self.children.append(positioned_child)
-      self.focused_child = positioned_child
-      return ACK
+    # Drop on self
+    self.children.append(positioned_child)
+    self.focused_child = positioned_child
+    return ACK
 
   def on_Drag(self, event, event_ctx):
     if self.focused_child is None:
@@ -114,7 +104,6 @@ class Container(Widget):
     if response is None:
       return
     else:
-      self.update_child_positions()
       if response is ACK:
         return ACK
       elif isinstance(response, UnparentChild):
@@ -123,18 +112,14 @@ class Container(Widget):
           vec2.sub(event_ctx.mouse_position, response.child_offset),
         )
 
-        if self.can_add_child(positioned_child):
-          self.children.append(positioned_child)
-          self.focused_child = positioned_child
-          return ACK
-        else:
-          return response.clone(former_parent=self)
+        self.children.append(positioned_child)
+        self.focused_child = positioned_child
+        return ACK
       else:
         raise TypeError("Don't know how to deal with child response %s" % response)
 
   def unparent_child(self, event_ctx, child):
     event = UnparentChild(
-      former_parent = self,
       child         = child.widget,
       child_offset  = vec2.sub(event_ctx.mouse_position, child.offset),
     )
