@@ -39,6 +39,10 @@ class UnparentChild(Event):
     self.child_offset = child_offset
 
 
+class ResendRequest(Event):
+  pass
+
+
 class DragWrapper(WidgetWrapper):
   def __init__(self, child):
     super().__init__(child)

@@ -2,7 +2,7 @@ import abc
 from ulugugu import drawings, vec2
 from ulugugu.events import ACK, send_event, event_used
 from ulugugu.widgets import Widget, Move
-from ulugugu.widgets.drag import UnparentChild, ReceiveChild
+from ulugugu.widgets.drag import UnparentChild, ReceiveChild, ResendRequest
 from ulugugu.utils import cursor_over_drawing
 from functional import foldl
 
@@ -58,7 +58,7 @@ class Container(Widget):
         return ACK
 
   def on_ReceiveChild(self, event, event_ctx):
-    positioned_child = drawings.Move(
+    positioned_child = Move(
       event.child,
       vec2.sub(event_ctx.mouse_position, event.child_offset),
     )
@@ -157,11 +157,20 @@ class Container(Widget):
   def maybe_drop_child(self, child, event_ctx):
     target = self.get_child_under_cursor(event_ctx, exclude={child})
     if target is not None:
-      event = ReceiveChild(
-        child        = child.widget,
-        child_offset = vec2.sub(event_ctx.mouse_position, child.offset),
-      )
-      response = self.send_event_child(target, event, event_ctx)
-      if event_used(response):
+      return self.send_ReceiveChild(child, target, event_ctx)
+    else:
+      return None, None
+
+  def send_ReceiveChild(self, child, target, event_ctx):
+    event = ReceiveChild(
+      child        = child.widget,
+      child_offset = vec2.sub(event_ctx.mouse_position, child.offset),
+    )
+    response = self.send_event_child(target, event, event_ctx)
+    if event_used(response):
+      if isinstance(response, ResendRequest):
+        return self.send_ReceiveChild(child, target, event_ctx)
+      else:
         return target, response
-    return None, None
+    else:
+      return None, None

@@ -39,8 +39,8 @@ class ProgramState:
 
 
 workspace = Workspace(700, 500)
-workspace.add_child(ApplicationWidget(), (100, 100))
-workspace.add_child(StaticWidget(drawings.Rectangle((100,10), (0,0,0))), (200, 100))
+workspace.add_child(Align(Besides(Workspace(200, 300), ApplicationWidget()), (0.5,0.5)), (100, 100))
+workspace.add_child(StaticWidget(drawings.Rectangle((150,10), (0,0,0))), (200, 100))
 sdl.main(ProgramState(DragWrapper(workspace)))
 
 #sdl.main(ProgramState(Above(ChangingSizeWidget(), MouseoverWidget())))

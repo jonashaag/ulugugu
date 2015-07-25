@@ -1,7 +1,7 @@
 from ulugugu.events import Event
 from ulugugu import drawings, vec2
 from ulugugu.widgets import Widget, WidgetWrapper, Move
-from ulugugu.widgets.drag import UnparentChild
+from ulugugu.widgets.drag import UnparentChild, ResendRequest
 from ulugugu.utils import cursor_over_drawing
 from ulugugu.events import ACK, send_event, event_used
 
@@ -21,12 +21,43 @@ class SwapWidget(WidgetWrapper):
     return response
 
 
+def filled_droparea_drawing(child_drawing_size):
+  w, h = child_drawing_size
+  return drawings.Rectangle(
+    (max(50, w), max(50, h)),
+    (0.5, 0.5, 0.5),
+    fill='stroke'
+  )
+
+
 class EmptyDropArea(Widget):
   def value(self):
     return None
 
   def get_drawing(self):
     return drawings.Rectangle((50, 50), (0.8, 0.8, 0.8))
+
+  def on_ReceiveChild(self, event, event_ctx):
+    return Swap(SemiFilledDropArea(event.child.get_drawing().boundingbox.size()), ResendRequest())
+
+  on_KeyPress_default = Widget.ignore
+  on_MousePress = Widget.ignore
+  on_MouseRelease = Widget.ignore
+  on_MouseMove = Widget.ignore
+  on_DragStart = Widget.ignore
+  on_DragStop = Widget.ignore
+  on_Drag = Widget.ignore
+
+
+class SemiFilledDropArea(Widget):
+  def __init__(self, child_drawing_size):
+    self.child_drawing_size = child_drawing_size
+
+  def value(self):
+    return None
+
+  def get_drawing(self):
+    return filled_droparea_drawing(self.child_drawing_size)
 
   def on_ReceiveChild(self, event, event_ctx):
     return Swap(
@@ -58,11 +89,7 @@ class FilledDropArea(Widget):
 
   def get_drawing(self):
     child_drawing = self.child.get_drawing()
-    area_drawing = drawings.Rectangle(
-      (max(50, child_drawing.boundingbox.width()), max(50, child_drawing.boundingbox.height())),
-      (0.5, 0.5, 0.5),
-      fill='stroke'
-    )
+    area_drawing = filled_droparea_drawing(child_drawing.boundingbox.size())
     return drawings.Atop(child_drawing, area_drawing) \
               .clone(boundingbox=area_drawing.boundingbox)
 
